@@ -19,6 +19,10 @@ public final class BackupManager extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        getLogger().info("BackupManager выгружен (фоновые выгрузки продолжат работу до завершения)");
+        if (backupCommand != null && backupCommand.isInProgress()) {
+            getLogger().info("[BackupManager] Ожидание завершения создания резервной копии перед выгрузкой");
+            backupCommand.awaitCompletion(90);
+        }
+        getLogger().info("BackupManager выгружен");
     }
 }
