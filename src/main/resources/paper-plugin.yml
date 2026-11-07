@@ -1,0 +1,16 @@
+name: BackupManager
+version: 1.0.0
+main: ru.milkyway.backupmanager.BackupManager
+api-version: '1.21'
+author: MilkyWay
+description: Ультралегковесная утилита создания и выгрузки бэкапов
+commands:
+  backupmanager:
+    description: Создать резервную копию сборки и загрузить на Gofile
+    aliases:
+      - bm
+    permission: backupmanager.admin
+permissions:
+  backupmanager.admin:
+    description: Доступ к созданию резервных копий
+    default: op
