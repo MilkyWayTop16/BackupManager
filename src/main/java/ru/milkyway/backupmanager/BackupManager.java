@@ -19,9 +19,6 @@ public final class BackupManager extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        if (backupCommand != null) {
-            backupCommand.cancelCurrentBackup();
-        }
-        getLogger().info("BackupManager выключен");
+        getLogger().info("BackupManager выгружен (фоновые выгрузки продолжат работу до завершения)");
     }
 }
