@@ -18,6 +18,8 @@ public final class BackupCommand implements CommandExecutor {
     private final JavaPlugin plugin;
     private final AtomicBoolean inProgress = new AtomicBoolean(false);
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private volatile String lastStatus = "Резервных копий еще не создавалось";
+    private volatile String lastUrl = null;
 
     public BackupCommand(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -30,12 +32,27 @@ public final class BackupCommand implements CommandExecutor {
             return true;
         }
 
-        if (!inProgress.compareAndSet(false, true)) {
-            sender.sendMessage("§8[§bBackupManager§8] §cСоздание резервной копии уже выполняется");
+        if (args.length > 0 && args[0].equalsIgnoreCase("status")) {
+            if (inProgress.get()) {
+                sender.sendMessage("§8[§bBackupManager§8] §eСоздание и выгрузка копии в процессе");
+            } else if (lastUrl != null) {
+                sender.sendMessage("§8[§bBackupManager§8] §aПоследняя копия готова: §f§n" + lastUrl);
+                sender.sendMessage("§8[§bBackupManager§8] §7Статус: " + lastStatus);
+            } else {
+                sender.sendMessage("§8[§bBackupManager§8] §7" + lastStatus);
+            }
             return true;
         }
 
-        sender.sendMessage("§8[§bBackupManager§8] §7Запуск асинхронной архивации сборки...");
+        if (!inProgress.compareAndSet(false, true)) {
+            sender.sendMessage("§8[§bBackupManager§8] §cСоздание резервной копии уже выполняется");
+            sender.sendMessage("§8[§bBackupManager§8] §7Используйте /" + label + " status для проверки");
+            return true;
+        }
+
+        lastStatus = "Архивация и выгрузка запущены";
+        sender.sendMessage("§8[§bBackupManager§8] §7Запуск асинхронной архивации сборки");
+        plugin.getLogger().info("[BackupManager] Запуск асинхронной архивации сборки");
 
         Path root = plugin.getServer().getWorldContainer().toPath().toAbsolutePath().normalize();
         String timestamp = LocalDateTime.now().format(FORMATTER);
@@ -48,17 +65,27 @@ public final class BackupCommand implements CommandExecutor {
                 long zipSize = Files.size(outputZip);
                 long archTime = System.currentTimeMillis() - start;
 
-                sender.sendMessage("§8[§bBackupManager§8] §7Упаковано " + result.fileCount()
-                        + " файлов (" + formatBytes(zipSize) + ") за " + (archTime / 1000.0) + " сек. Загрузка на Gofile...");
+                String archMsg = "Упаковано " + result.fileCount()
+                        + " файлов (" + formatBytes(zipSize) + ") за " + (archTime / 1000.0) + " сек. Загрузка на Gofile";
+                sender.sendMessage("§8[§bBackupManager§8] §7" + archMsg);
+                plugin.getLogger().info("[BackupManager] " + archMsg);
 
                 long uploadStart = System.currentTimeMillis();
                 String downloadUrl = GofileClient.upload(outputZip);
                 long uploadTime = System.currentTimeMillis() - uploadStart;
 
-                sender.sendMessage("§8[§bBackupManager§8] §aСборка готова: §f§n" + downloadUrl);
+                lastUrl = downloadUrl;
+                lastStatus = "Загружено за " + (uploadTime / 1000.0) + " сек (" + formatBytes(zipSize) + ")";
+
+                String successMsg = "Сборка готова: " + downloadUrl;
+                sender.sendMessage("§8[§bBackupManager§8] §a" + successMsg);
                 sender.sendMessage("§8[§bBackupManager§8] §7Загружено за " + (uploadTime / 1000.0) + " сек. Временный архив удалён с диска");
+                plugin.getLogger().info("[BackupManager] " + successMsg);
+                plugin.getLogger().info("[BackupManager] " + lastStatus);
             } catch (Exception e) {
+                lastStatus = "Ошибка: " + e.getMessage();
                 sender.sendMessage("§8[§bBackupManager§8] §cСбой при создании резервной копии: " + e.getMessage());
+                plugin.getLogger().warning("[BackupManager] Сбой при создании резервной копии: " + e.getMessage());
             } finally {
                 try {
                     Files.deleteIfExists(outputZip);
