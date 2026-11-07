@@ -20,9 +20,26 @@ public final class BackupCommand implements CommandExecutor {
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
     private volatile String lastStatus = "Резервных копий еще не создавалось";
     private volatile String lastUrl = null;
+    private volatile CompletableFuture<?> currentFuture = null;
+    private volatile Path currentZip = null;
 
     public BackupCommand(JavaPlugin plugin) {
         this.plugin = plugin;
+    }
+
+    public void cancelCurrentBackup() {
+        CompletableFuture<?> future = currentFuture;
+        if (future != null && !future.isDone()) {
+            future.cancel(true);
+        }
+        Path zip = currentZip;
+        if (zip != null) {
+            try {
+                Files.deleteIfExists(zip);
+            } catch (Exception ignored) {
+            }
+        }
+        inProgress.set(false);
     }
 
     @Override
@@ -57,8 +74,9 @@ public final class BackupCommand implements CommandExecutor {
         Path root = plugin.getServer().getWorldContainer().toPath().toAbsolutePath().normalize();
         String timestamp = LocalDateTime.now().format(FORMATTER);
         Path outputZip = root.resolve("backup-" + timestamp + ".zip");
+        this.currentZip = outputZip;
 
-        CompletableFuture.runAsync(() -> {
+        this.currentFuture = CompletableFuture.runAsync(() -> {
             try {
                 long start = System.currentTimeMillis();
                 BackupArchiver.ArchiveResult result = BackupArchiver.createArchive(root, outputZip);
@@ -91,6 +109,8 @@ public final class BackupCommand implements CommandExecutor {
                     Files.deleteIfExists(outputZip);
                 } catch (Exception ignored) {
                 }
+                currentZip = null;
+                currentFuture = null;
                 inProgress.set(false);
             }
         });

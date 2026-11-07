@@ -87,6 +87,10 @@ public final class GofileClient {
                 byte[] buf = new byte[65536];
                 int read;
                 while ((read = in.read(buf)) != -1) {
+                    if (Thread.currentThread().isInterrupted()) {
+                        conn.disconnect();
+                        throw new InterruptedException("Загрузка прервана");
+                    }
                     out.write(buf, 0, read);
                 }
             }
@@ -98,26 +102,19 @@ public final class GofileClient {
         int code = conn.getResponseCode();
         InputStream respStream = (code >= 200 && code < 300) ? conn.getInputStream() : conn.getErrorStream();
         StringBuilder responseBuilder = new StringBuilder();
-        if (respStream != null) {
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(respStream, StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    responseBuilder.append(line);
-                }
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(respStream, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                responseBuilder.append(line);
             }
         }
 
-        conn.disconnect();
-
-        if (code != 200) {
-            throw new IllegalStateException("HTTP " + code + ": " + responseBuilder);
-        }
-
-        Matcher matcher = DOWNLOAD_PAGE_PATTERN.matcher(responseBuilder.toString());
+        String json = responseBuilder.toString();
+        Matcher matcher = DOWNLOAD_PAGE_PATTERN.matcher(json);
         if (matcher.find()) {
-            return matcher.group(1).replace("\\/", "/");
+            return matcher.group(1);
         }
 
-        throw new IllegalStateException("Ссылка на скачивание не найдена в ответе Gofile: " + responseBuilder);
+        throw new IllegalStateException("Сервер Gofile вернул неожиданный ответ: " + json);
     }
 }

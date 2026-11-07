@@ -31,6 +31,9 @@ public final class BackupArchiver {
             Files.walkFileTree(root, new SimpleFileVisitor<>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    if (Thread.currentThread().isInterrupted()) {
+                        return FileVisitResult.TERMINATE;
+                    }
                     if (BackupFilter.shouldSkip(root, dir)) {
                         return FileVisitResult.SKIP_SUBTREE;
                     }
@@ -39,6 +42,9 @@ public final class BackupArchiver {
 
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    if (Thread.currentThread().isInterrupted()) {
+                        return FileVisitResult.TERMINATE;
+                    }
                     if (file.equals(outputZip) || BackupFilter.shouldSkip(root, file)) {
                         return FileVisitResult.CONTINUE;
                     }
@@ -51,6 +57,9 @@ public final class BackupArchiver {
                     try (BufferedInputStream bis = new BufferedInputStream(Files.newInputStream(file), 65536)) {
                         int read;
                         while ((read = bis.read(buffer)) != -1) {
+                            if (Thread.currentThread().isInterrupted()) {
+                                return FileVisitResult.TERMINATE;
+                            }
                             zos.write(buffer, 0, read);
                             bytes[0] += read;
                         }
@@ -66,6 +75,10 @@ public final class BackupArchiver {
                     return FileVisitResult.CONTINUE;
                 }
             });
+
+            if (Thread.currentThread().isInterrupted()) {
+                throw new IOException("Архивация прервана");
+            }
 
             zos.finish();
         }
